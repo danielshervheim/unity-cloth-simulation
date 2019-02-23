@@ -1,0 +1,243 @@
+﻿#pragma kernel Spring
+#pragma kernel Drag
+#pragma kernel Integrate
+
+
+
+//
+// SIMULATION STORAGE
+//
+
+/* Buffers to hold the current position, velocity, and force of each node. */
+RWStructuredBuffer<float3> positionBuffer;
+RWStructuredBuffer<float3> velocityBuffer;
+RWStructuredBuffer<float3> forceBuffer;
+
+/* A list of which nodes are fixed (1) or not (0). */
+RWStructuredBuffer<uint> restrainedBuffer;
+
+/* The total number of nodes, and the number of nodes per row in the cloth. */
+uint count, dim;  
+
+/* A list of triangles, where each component of the uint3 is a node index. */
+RWStructuredBuffer<uint3> triangleBuffer;
+uint triangleCount;
+
+
+
+//
+// SIMULATION PARAMETERS
+//
+
+float mass;
+float cor;
+float dt;
+
+/* Wind parameters. */
+float windScale;
+float dragCoefficient;
+float3 windVelocity;
+
+/* Spring parameters (multiplier, rest length, spring constant, damping constant)
+for parallel, diagonal, and bending springs. */
+float pScale, pRl, pKs, pKd;
+float dScale, dRl, dKs, dKd;
+float bScale, bRl, bKs, bKd;
+
+
+
+//
+// INDEXING UTILITIES
+//
+
+/* Converts 1D buffer index to hypothetical 2D index. */
+int2 To2D(uint id) {
+	return int2(id%dim, id/dim);
+}
+
+/* Converts hypothetical 2D index to 1D buffer index. */
+uint To1D(int2 id) {
+	return (uint)(id.y * dim + id.x);
+}
+
+/* Returns whether the 2d index is valid, i.e. within the cloth. */
+uint IsValid2D(int2 id) {
+	return (id.x < 0 || id.x >= (int)dim || id.y < 0 || id.y >= (int)dim) ? 0 : 1;
+}
+
+
+
+//
+// SPRING FORCE CALCULATORS
+//
+
+/* Gets the force on node A by the spring AB. */
+float3 GetSpringForce(uint a, uint b, float restLength, float ks, float kd) {
+	float3 aPos = positionBuffer[a];
+	float3 bPos = positionBuffer[b];
+
+	float3 aVel = velocityBuffer[a];
+	float3 bVel = velocityBuffer[b];
+
+	if (length(bPos - aPos) < 0.00001) {
+		return float3(0,0,0);
+	}
+
+	float3 dir = normalize(bPos - aPos);
+
+	float springForce = -ks * (length(bPos-aPos) - restLength);
+	float dampingForce = -kd * (dot(bVel, dir)-dot(aVel, dir));
+	// float dampingForce = -kd * dot(bVel-aVel, dir);  // same thing
+
+	return (springForce + dampingForce)*dir;
+}
+
+/* Get the forces from all parallel springs acting on node i. */
+float3 GetParallelSpringForces(uint i) {
+	float3 force = float3(0,0,0);
+
+	int2 above = To2D(i) + int2(0, 1);
+	int2 below = To2D(i) + int2(0, -1);
+	int2 left = To2D(i) + int2(-1, 0);
+	int2 right = To2D(i) + int2(1, 0);
+
+	if (IsValid2D(above) == 1) {
+		force += GetSpringForce(i, To1D(above), pRl, pKs, pKd);
+	}
+
+	if (IsValid2D(below) == 1) {
+		force += GetSpringForce(i, To1D(below), pRl, pKs, pKd);
+	}
+
+	if (IsValid2D(left) == 1) {
+		force += GetSpringForce(i, To1D(left), pRl, pKs, pKd);
+	}
+
+	if (IsValid2D(right) == 1) {
+		force += GetSpringForce(i, To1D(right), pRl, pKs, pKd);
+	}
+
+	return force;
+}
+
+/* Get the forces from all diagonal springs acting on node i. */
+float3 GetDiagonalSpringForces(uint i) {
+	float3 force = float3(0,0,0);
+
+	int2 ll = To2D(i) + int2(-1, -1);
+	int2 ul = To2D(i) + int2(-1, 1);
+	int2 lr = To2D(i) + int2(1, -1);
+	int2 ur = To2D(i) + int2(1, 1);
+
+	if (IsValid2D(ll) == 1) {
+		force += GetSpringForce(i, To1D(ll), dRl, dKs, dKd);
+	}
+
+	if (IsValid2D(ul) == 1) {
+		force += GetSpringForce(i, To1D(ul), dRl, dKs, dKd);
+	}
+
+	if (IsValid2D(lr) == 1) {
+		force += GetSpringForce(i, To1D(lr), dRl, dKs, dKd);
+	}
+
+	if (IsValid2D(ur) == 1) {
+		force += GetSpringForce(i, To1D(ur), dRl, dKs, dKd);
+	}
+
+	return force;
+}
+
+/* Get the forces from all bending springs acting on node i. */
+float3 GetBendingSpringForces(uint i) {
+	float3 force = float3(0,0,0);
+
+	int2 ll = To2D(i) + int2(-2, -2);
+	int2 ul = To2D(i) + int2(-2, 2);
+	int2 lr = To2D(i) + int2(2, -2);
+	int2 ur = To2D(i) + int2(2, 2);
+
+	if (IsValid2D(ll) == 1) {
+		force += GetSpringForce(i, To1D(ll), bRl, bKs, bKd);
+	}
+
+	if (IsValid2D(ul) == 1) {
+		force += GetSpringForce(i, To1D(ul), bRl, bKs, bKd);
+	}
+
+	if (IsValid2D(lr) == 1) {
+		force += GetSpringForce(i, To1D(lr), bRl, bKs, bKd);
+	}
+
+	if (IsValid2D(ur) == 1) {
+		force += GetSpringForce(i, To1D(ur), bRl, bKs, bKd);
+	}
+
+	return force;
+}
+
+
+//
+// KERNEL METHODS
+//
+
+[numthreads(256, 1, 1)]
+void Spring (uint3 id : SV_DispatchThreadID) {
+
+	if (id.x < count) {
+		forceBuffer[id.x] += GetParallelSpringForces(id.x) * saturate(pScale);
+		forceBuffer[id.x] += GetDiagonalSpringForces(id.x) * saturate(dScale);
+		forceBuffer[id.x] += GetBendingSpringForces(id.x) * saturate(bScale);
+	}
+}
+
+[numthreads(256, 1, 1)]
+void Drag(uint3 id : SV_DispatchThreadID) {
+	if (id.x < triangleCount) {
+
+		// get vertex ids from triangle buffer
+		uint a = triangleBuffer[id.x].x;
+		uint b = triangleBuffer[id.x].y;
+		uint c = triangleBuffer[id.x].z;
+
+		float rho = 1.225;  // kg/m^3, density of air at sea level
+
+		// velocity of triangle relative to air
+		float3 velocity = (velocityBuffer[a]+velocityBuffer[b]+velocityBuffer[c])/3.0 - windVelocity;
+
+		// triangle normal
+		float3 normal = normalize(cross(positionBuffer[b]-positionBuffer[a], positionBuffer[c]-positionBuffer[a]));
+
+		// triangle area, and cross sectional area (area exposed to flow)
+		float area = 0.5 * length(cross(positionBuffer[b]-positionBuffer[a], positionBuffer[c]-positionBuffer[a]));
+		float crossSectionArea = area * dot(velocity, normal);
+
+		// error before, on first frame velocities are all 0 so length(velocity) == 0 causing division by zero
+		if (length(velocity) > 0.000001) {
+			crossSectionArea /= length(velocity);
+		}
+
+		float3 force = -0.5 * rho * pow(length(velocity), 2.0) * dragCoefficient * crossSectionArea * normal;
+
+		// divide force by three, distributed across 3 vertices
+		forceBuffer[a] += force/3.0 * saturate(windScale);
+		forceBuffer[b] += force/3.0 * saturate(windScale);
+		forceBuffer[c] += force/3.0 * saturate(windScale);
+	}
+}
+
+[numthreads(256, 1, 1)]
+void Integrate (uint3 id : SV_DispatchThreadID) {
+	if (id.x < count) {
+		float3 g = float3(0, -9.81, 0);
+
+		float3 a = g + forceBuffer[id.x]/mass;
+
+		if (restrainedBuffer[id.x] == 0) {
+
+			// Eularian integration.
+			velocityBuffer[id.x] += a * dt;
+			positionBuffer[id.x] += velocityBuffer[id.x] * dt;
+		}
+	}
+}
