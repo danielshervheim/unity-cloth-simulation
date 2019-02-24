@@ -1,4 +1,5 @@
-﻿#pragma kernel Spring
+﻿#include "../GPUCollision.cginc"
+#pragma kernel Spring
 #pragma kernel Drag
 #pragma kernel Integrate
 
@@ -22,6 +23,18 @@ uint count, dim;
 /* A list of triangles, where each component of the uint3 is a node index. */
 RWStructuredBuffer<uint3> triangleBuffer;
 uint triangleCount;
+
+
+
+//
+// COLLISION STORAGE
+//
+
+RWStructuredBuffer<SphereCollider> sphereBuffer;
+uint sphereCount;
+
+RWStructuredBuffer<BoxCollider> boxBuffer;
+uint boxCount;
 
 
 
@@ -61,8 +74,8 @@ uint To1D(int2 id) {
 }
 
 /* Returns whether the 2d index is valid, i.e. within the cloth. */
-uint IsValid2D(int2 id) {
-	return (id.x < 0 || id.x >= (int)dim || id.y < 0 || id.y >= (int)dim) ? 0 : 1;
+bool IsValid2D(int2 id) {
+	return !(id.x < 0 || id.x >= (int)dim || id.y < 0 || id.y >= (int)dim);
 }
 
 
@@ -101,19 +114,19 @@ float3 GetParallelSpringForces(uint i) {
 	int2 left = To2D(i) + int2(-1, 0);
 	int2 right = To2D(i) + int2(1, 0);
 
-	if (IsValid2D(above) == 1) {
+	if (IsValid2D(above)) {
 		force += GetSpringForce(i, To1D(above), pRl, pKs, pKd);
 	}
 
-	if (IsValid2D(below) == 1) {
+	if (IsValid2D(below)) {
 		force += GetSpringForce(i, To1D(below), pRl, pKs, pKd);
 	}
 
-	if (IsValid2D(left) == 1) {
+	if (IsValid2D(left)) {
 		force += GetSpringForce(i, To1D(left), pRl, pKs, pKd);
 	}
 
-	if (IsValid2D(right) == 1) {
+	if (IsValid2D(right)) {
 		force += GetSpringForce(i, To1D(right), pRl, pKs, pKd);
 	}
 
@@ -129,19 +142,19 @@ float3 GetDiagonalSpringForces(uint i) {
 	int2 lr = To2D(i) + int2(1, -1);
 	int2 ur = To2D(i) + int2(1, 1);
 
-	if (IsValid2D(ll) == 1) {
+	if (IsValid2D(ll)) {
 		force += GetSpringForce(i, To1D(ll), dRl, dKs, dKd);
 	}
 
-	if (IsValid2D(ul) == 1) {
+	if (IsValid2D(ul)) {
 		force += GetSpringForce(i, To1D(ul), dRl, dKs, dKd);
 	}
 
-	if (IsValid2D(lr) == 1) {
+	if (IsValid2D(lr)) {
 		force += GetSpringForce(i, To1D(lr), dRl, dKs, dKd);
 	}
 
-	if (IsValid2D(ur) == 1) {
+	if (IsValid2D(ur)) {
 		force += GetSpringForce(i, To1D(ur), dRl, dKs, dKd);
 	}
 
@@ -157,19 +170,19 @@ float3 GetBendingSpringForces(uint i) {
 	int2 lr = To2D(i) + int2(2, -2);
 	int2 ur = To2D(i) + int2(2, 2);
 
-	if (IsValid2D(ll) == 1) {
+	if (IsValid2D(ll)) {
 		force += GetSpringForce(i, To1D(ll), bRl, bKs, bKd);
 	}
 
-	if (IsValid2D(ul) == 1) {
+	if (IsValid2D(ul)) {
 		force += GetSpringForce(i, To1D(ul), bRl, bKs, bKd);
 	}
 
-	if (IsValid2D(lr) == 1) {
+	if (IsValid2D(lr)) {
 		force += GetSpringForce(i, To1D(lr), bRl, bKs, bKd);
 	}
 
-	if (IsValid2D(ur) == 1) {
+	if (IsValid2D(ur)) {
 		force += GetSpringForce(i, To1D(ur), bRl, bKs, bKd);
 	}
 
@@ -226,6 +239,8 @@ void Drag(uint3 id : SV_DispatchThreadID) {
 	}
 }
 
+
+
 [numthreads(256, 1, 1)]
 void Integrate (uint3 id : SV_DispatchThreadID) {
 	if (id.x < count) {
@@ -235,9 +250,54 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 
 		if (restrainedBuffer[id.x] == 0) {
 
+			float3 op = positionBuffer[id.x];
+			float3 ov = velocityBuffer[id.x];
+
 			// Eularian integration.
 			velocityBuffer[id.x] += a * dt;
 			positionBuffer[id.x] += velocityBuffer[id.x] * dt;
+
+			// Collision detection.
+			Ray r;
+			r.origin = op;
+			r.direction = (positionBuffer[id.x] - op);
+
+
+			for (uint s = 0; s < sphereCount; s++) {
+				Hit h = RaySphereCollision(r, sphereBuffer[s]);
+				if (h.collision) {
+					positionBuffer[id.x] = h.hitPoint;
+					velocityBuffer[id.x] = saturate(cor) * (velocityBuffer[id.x] - 2.0*dot(velocityBuffer[id.x], h.hitNormal)*h.hitNormal);
+				}
+			}
+
+
+
+
+
+
+
+
+
+			/*
+			for (uint b = 0; b < boxCount; b++) {
+				Hit h = RayBoxCollision(r, boxBuffer[b]);
+
+				if (h.collision) {
+
+
+					positionBuffer[id.x] = h.hitPoint;
+
+					// Average of previous and current velocities...
+					float3 v = (velocityBuffer[id.x] + ov) / 2.0;
+
+					// ...Reflected along the hit normal.
+					velocityBuffer[id.x] = saturate(cor) * (v - 2.0*dot(v, h.hitNormal)*h.hitNormal);
+				}
+			}
+			*/
+
+
 		}
 	}
 }

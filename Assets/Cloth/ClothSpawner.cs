@@ -6,33 +6,28 @@ using UnityEngine;
 public class ClothSpawner : MonoBehaviour {
 
 	// Simulation settings.
-	public int resolution = 25;
-	public float size = 10f;
+	public int resolution = 25;  // Not changeable at runtime.
+	public float size = 10f;  // Not changeable at runtime.
 	public int loops = 500;
-	[Range(0f, 1f)]
 	public float cor = 0.1f;
 	public float mass = 1.0f;
 
 	// parallel spring parameters
-	[Range(0f, 1f)]
 	public float pScale = 1.0f;
 	public float pKs = -10000.0f;
 	public float pKd = -1000.0f;
 
 	// Diagonal spring parameters.
-	[Range(0f, 1f)]
 	public float dScale = 1.0f;
 	public float dKs = -10000.0f;
 	public float dKd = -1000.0f;
 
 	// Bending spring parameters.
-	[Range(0f, 1f)]
 	public float bScale = 1.0f;
 	public float bKs = -10000.0f;
 	public float bKd = -1000.0f;
 
 	// Wind / drag parameters.
-	[Range(0f, 1f)]
 	public float windScale = 1.0f;
 	public float dragCoefficient = 50.0f;
 	public Vector3 windVelocity = Vector3.zero;
@@ -58,15 +53,21 @@ public class ClothSpawner : MonoBehaviour {
 	private ComputeBuffer restrainedBuffer;
 	private ComputeBuffer triangleBuffer;
 
-	// Other
+	// Other.
 	private int count;  // total number of nodes.
 	private int dim;  // number of nodes per row in cloth.
 	private float segmentLength;  // length of one square of cloth.
 	private Vector3[] zeros;
 	private bool successfullyInitialized = false;
 
+	// Collision.
+	public GPUCollision.SphereCollider[] sphereColliders;
+	private ComputeBuffer sphereBuffer;
+	private int sphereCount;
 
-
+	public GPUCollision.BoxCollider[] boxColliders;
+	private ComputeBuffer boxBuffer;
+	private int boxCount;
 
 
 	void OnValidate() {
@@ -88,9 +89,7 @@ public class ClothSpawner : MonoBehaviour {
 
 
 	void Awake() {
-		if (clothCompute == null) {
-			return;
-		}
+		clothCompute = (ComputeShader)Instantiate(Resources.Load("ClothCompute"));
 
 		// Create and set the mesh.
 		mesh = CreateMesh("ClothMesh");
@@ -163,6 +162,23 @@ public class ClothSpawner : MonoBehaviour {
 		clothCompute.SetFloat("dRl", segmentLength * Mathf.Sqrt(2.0f));
 		clothCompute.SetFloat("bRl", segmentLength * Mathf.Sqrt(2.0f) * 2.0f);
 
+		// Create and set the collision buffers.
+		if (sphereColliders != null && sphereColliders.Length > 0) {
+			sphereBuffer = new ComputeBuffer(sphereColliders.Length, GPUCollision.SphereColliderSize());
+			sphereBuffer.SetData(sphereColliders);
+			clothCompute.SetBuffer(integrateKernel, "sphereBuffer", sphereBuffer);
+		}
+		sphereCount = sphereColliders.Length;
+		clothCompute.SetInt("sphereCount", sphereCount);
+
+		if (boxColliders != null && boxColliders.Length > 0) {
+			boxBuffer = new ComputeBuffer(boxColliders.Length, GPUCollision.BoxColliderSize());
+			boxBuffer.SetData(boxColliders);
+		clothCompute.SetBuffer(integrateKernel, "boxBuffer", boxBuffer);
+		}
+		boxCount = boxColliders.Length;
+		clothCompute.SetInt("sphereCount", boxCount);
+
 		// Initialization was successful.
 		successfullyInitialized = true;
 	}
@@ -191,6 +207,31 @@ public class ClothSpawner : MonoBehaviour {
 			clothCompute.SetFloat("bScale", bScale);
 			clothCompute.SetFloat("bKs", bKs);
 			clothCompute.SetFloat("bKd", bKd);
+
+			// Update the collision buffers.
+			if (sphereColliders.Length != sphereCount) {
+				if (sphereBuffer != null) {
+					sphereBuffer.Release();
+				}
+				
+				if (sphereColliders.Length > 0) {
+					sphereBuffer = new ComputeBuffer(sphereColliders.Length, GPUCollision.SphereColliderSize());
+					sphereBuffer.SetData(sphereColliders);
+				}
+				sphereCount = sphereColliders.Length;
+			}
+
+			if (boxColliders.Length != boxCount) {
+				if (boxBuffer != null) {
+					boxBuffer.Release();
+				}
+				
+				if (boxColliders.Length > 0) {
+					boxBuffer = new ComputeBuffer(boxColliders.Length, GPUCollision.SphereColliderSize());
+					boxBuffer.SetData(boxColliders);
+				}
+				boxCount = boxColliders.Length;
+			}
 
 			// Advance the simulation n times.
 			for (int i = 0; i < loops; i++) {
@@ -236,12 +277,20 @@ public class ClothSpawner : MonoBehaviour {
 		if (triangleBuffer != null) {
 			triangleBuffer.Release();
 		}
+
+		if (sphereBuffer != null) {
+			sphereBuffer.Release();
+		}
+
+		if (boxBuffer != null) {
+			boxBuffer.Release();
+		}
 	}
 
 
 
 	void OnDrawGizmos() {
-		if (vertices != null) {
+		if (vertices != null && !successfullyInitialized) {
 			for (int i = 0; i < vertices.Length; i++) {
 				if (restrained != null && System.Array.Exists(restrained, element => element == i)) {
 					Gizmos.color = Color.red;
@@ -251,6 +300,18 @@ public class ClothSpawner : MonoBehaviour {
 					Gizmos.color = Color.white;
 					Gizmos.DrawSphere(vertices[i], segmentLength*0.125f);
 				}
+			}
+		}
+
+		if (sphereColliders != null) {
+			foreach (GPUCollision.SphereCollider s in sphereColliders) {
+				Gizmos.DrawWireSphere(s.center, s.radius);
+			}
+		}
+
+		if (boxColliders != null) {
+			foreach(GPUCollision.BoxCollider b in boxColliders) {
+				Gizmos.DrawWireCube(b.center, b.extents*2f);
 			}
 		}
 	}

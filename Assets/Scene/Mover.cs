@@ -14,25 +14,33 @@ public class Mover : MonoBehaviour {
 	public float moveSpeed = 1f;
 	public float lookSpeed = 1f;
 
-	void Start() {
-		Cursor.visible = false;
-	}
+	private bool locked = false;
 	
 	// Update is called once per frame
 	void Update () {
-		Vector3 forward = Vector3.Normalize(Vector3.Scale(transform.forward, new Vector3(1f, 0f, 1f)));
-		Vector3 right = Vector3.Normalize(Vector3.Scale(transform.right, new Vector3(1f, 0f, 1f)));
-		transform.position += (forward*Input.GetAxis("Vertical") + right*Input.GetAxis("Horizontal")) * moveSpeed * Time.deltaTime;
+		Cursor.visible = locked;
+
+		if (Input.GetKeyUp("l")) {
+			locked = !locked;
+		}
+
+		if (!locked) {
+			Vector3 forward = Vector3.Normalize(Vector3.Scale(transform.forward, new Vector3(1f, 0f, 1f)));
+			Vector3 right = Vector3.Normalize(Vector3.Scale(transform.right, new Vector3(1f, 0f, 1f)));
+			transform.position += (forward*Input.GetAxis("Vertical") + right*Input.GetAxis("Horizontal")) * moveSpeed * Time.deltaTime;
 
 
-		float vertical = System.Convert.ToSingle(Input.GetKey(KeyCode.Space)) - System.Convert.ToSingle(Input.GetKey(KeyCode.LeftShift));
-		transform.position += vertical*Vector3.up*moveSpeed*Time.deltaTime;
+			float vertical = System.Convert.ToSingle(Input.GetKey(KeyCode.Space)) - System.Convert.ToSingle(Input.GetKey(KeyCode.LeftShift));
+			transform.position += vertical*Vector3.up*moveSpeed*Time.deltaTime;
+		}	
 	}
 
 	void LateUpdate () {
-		pitch -= Input.GetAxis("Mouse Y") * lookSpeed;
-		yaw += Input.GetAxis("Mouse X") * lookSpeed;
+		if (!locked) {
+			pitch -= Input.GetAxis("Mouse Y") * lookSpeed;
+			yaw += Input.GetAxis("Mouse X") * lookSpeed;
 
-		transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(pitch, yaw, 0f), Time.deltaTime*10f);
+			transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(pitch, yaw, 0f), Time.deltaTime*10f);
+		}
 	}
 }
