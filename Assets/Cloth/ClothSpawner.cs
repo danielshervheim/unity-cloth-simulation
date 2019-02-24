@@ -174,10 +174,10 @@ public class ClothSpawner : MonoBehaviour {
 		if (boxColliders != null && boxColliders.Length > 0) {
 			boxBuffer = new ComputeBuffer(boxColliders.Length, GPUCollision.BoxColliderSize());
 			boxBuffer.SetData(boxColliders);
-		clothCompute.SetBuffer(integrateKernel, "boxBuffer", boxBuffer);
+			clothCompute.SetBuffer(integrateKernel, "boxBuffer", boxBuffer);
 		}
 		boxCount = boxColliders.Length;
-		clothCompute.SetInt("sphereCount", boxCount);
+		clothCompute.SetInt("boxCount", boxCount);
 
 		// Initialization was successful.
 		successfullyInitialized = true;
@@ -209,17 +209,22 @@ public class ClothSpawner : MonoBehaviour {
 			clothCompute.SetFloat("bKd", bKd);
 
 			// Update the collision buffers.
+			/*
 			if (sphereColliders.Length != sphereCount) {
 				if (sphereBuffer != null) {
 					sphereBuffer.Release();
 				}
-				
+
 				if (sphereColliders.Length > 0) {
 					sphereBuffer = new ComputeBuffer(sphereColliders.Length, GPUCollision.SphereColliderSize());
-					sphereBuffer.SetData(sphereColliders);
 				}
-				sphereCount = sphereColliders.Length;
 			}
+			*/
+			sphereBuffer.SetData(sphereColliders);
+			// sphereCount = sphereColliders.Length;
+			// clothCompute.SetInt("sphereCount", sphereCount);
+				
+
 
 			if (boxColliders.Length != boxCount) {
 				if (boxBuffer != null) {

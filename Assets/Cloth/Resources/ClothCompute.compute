@@ -275,10 +275,6 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 
 
 
-
-
-
-
 			/*
 			for (uint b = 0; b < boxCount; b++) {
 				Hit h = RayBoxCollision(r, boxBuffer[b]);
@@ -296,6 +292,7 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 				}
 			}
 			*/
+
 
 
 		}

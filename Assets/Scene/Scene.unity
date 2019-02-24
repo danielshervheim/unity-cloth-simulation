@@ -277,6 +277,11 @@ Prefab:
   m_Modification:
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 114148055552445962, guid: 34b959eadf913aa479fef540a9746512,
+        type: 2}
+      propertyPath: sphereColliders.Array.size
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4775959566001480, guid: 34b959eadf913aa479fef540a9746512, type: 2}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -308,6 +313,26 @@ Prefab:
     - target: {fileID: 4775959566001480, guid: 34b959eadf913aa479fef540a9746512, type: 2}
       propertyPath: m_RootOrder
       value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 114148055552445962, guid: 34b959eadf913aa479fef540a9746512,
+        type: 2}
+      propertyPath: sphereColliders.Array.data[0].radius
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 114148055552445962, guid: 34b959eadf913aa479fef540a9746512,
+        type: 2}
+      propertyPath: sphereColliders.Array.data[0].center.y
+      value: -2.25
+      objectReference: {fileID: 0}
+    - target: {fileID: 114148055552445962, guid: 34b959eadf913aa479fef540a9746512,
+        type: 2}
+      propertyPath: sphereColliders.Array.data[0].center.x
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 114148055552445962, guid: 34b959eadf913aa479fef540a9746512,
+        type: 2}
+      propertyPath: sphereColliders.Array.data[0].center.z
+      value: 5
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 34b959eadf913aa479fef540a9746512, type: 2}

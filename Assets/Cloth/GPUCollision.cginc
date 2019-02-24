@@ -38,7 +38,26 @@ struct Hit {
 /* Ray Sphere Intersection from "Real-Time Collision Detection" by Christer Ericson. */
 Hit RaySphereCollision(Ray r, SphereCollider s) {
 	Hit h;
+	h.collision = false;
 
+	float3 p;
+
+	if (length(r.origin - s.center) < length(r.origin+r.direction-s.center)) {
+		p = r.origin;
+	}
+	else {
+		p = r.origin+r.direction;
+	}
+
+	if (length(p - s.center) <= s.radius) {
+		h.collision = true;
+	}
+
+	h.hitPoint = s.center + normalize(p-s.center)*(s.radius+5.0*EPSILON);
+	h.hitNormal = normalize(h.hitPoint - s.center);
+	return h;
+
+	/*
 	h.collision = false;
 	h.hitPoint = float3(0, 0, 0);
 	h.hitNormal = float3(0, 1, 0);
@@ -47,13 +66,6 @@ Hit RaySphereCollision(Ray r, SphereCollider s) {
 	float c = dot(r.origin - s.center, r.origin - s.center) - pow(s.radius, 2.0);
 
 	// todo: handle case where ray starts inside sphere
-
-	/*
-	if ray starts in sphere, move BACKWARDS along ray until we are outside of sphere again (Assume we shouldn't have gone in in the first place).
-	
-
-
-	*/
 
 	if (c > 0 && b > 0) {
 		return h;
@@ -76,6 +88,7 @@ Hit RaySphereCollision(Ray r, SphereCollider s) {
 	h.hitPoint = s.center + normalize(hp-s.center)*(s.radius + 5.0*EPSILON);
 	h.hitNormal = normalize(h.hitPoint - s.center);
 	return h;
+	*/
 }
 
 Hit RayBoxCollision(Ray r, BoxCollider b) {
