@@ -262,12 +262,11 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 			r.origin = op;
 			r.direction = (positionBuffer[id.x] - op);
 
-
 			for (uint s = 0; s < sphereCount; s++) {
-				Hit h = RaySphereCollision(r, sphereBuffer[s]);
+				Hit h = RaySphereCollision(r, sphereBuffer[s], 0.05);
 				if (h.collision) {
 					positionBuffer[id.x] = h.hitPoint;
-					velocityBuffer[id.x] = saturate(cor) * (velocityBuffer[id.x] - 2.0*dot(velocityBuffer[id.x], h.hitNormal)*h.hitNormal);
+					velocityBuffer[id.x] = saturate(cor) * Reflect(velocityBuffer[id.x], h.hitNormal);
 				}
 			}
 
@@ -292,7 +291,6 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 				}
 			}
 			*/
-
 
 
 		}
