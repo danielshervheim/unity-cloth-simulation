@@ -1,4 +1,4 @@
-﻿#include "../GPUCollision.cginc"
+﻿#include "../Shaders/GPUCollision.cginc"
 #pragma kernel Spring
 #pragma kernel Drag
 #pragma kernel Integrate
@@ -32,9 +32,6 @@ uint triangleCount;
 
 RWStructuredBuffer<SphereCollider> sphereBuffer;
 uint sphereCount;
-
-RWStructuredBuffer<BoxCollider> boxBuffer;
-uint boxCount;
 
 
 
@@ -269,30 +266,6 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 					velocityBuffer[id.x] = saturate(cor) * Reflect(velocityBuffer[id.x], h.hitNormal);
 				}
 			}
-
-
-
-
-
-			/*
-			for (uint b = 0; b < boxCount; b++) {
-				Hit h = RayBoxCollision(r, boxBuffer[b]);
-
-				if (h.collision) {
-
-
-					positionBuffer[id.x] = h.hitPoint;
-
-					// Average of previous and current velocities...
-					float3 v = (velocityBuffer[id.x] + ov) / 2.0;
-
-					// ...Reflected along the hit normal.
-					velocityBuffer[id.x] = saturate(cor) * (v - 2.0*dot(v, h.hitNormal)*h.hitNormal);
-				}
-			}
-			*/
-
-
 		}
 	}
 }

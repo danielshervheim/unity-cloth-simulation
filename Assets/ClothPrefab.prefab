@@ -56,7 +56,7 @@ MeshRenderer:
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_Materials:
-  - {fileID: 2100000, guid: 3e47b02492de8b4488018188034bc9b7, type: 2}
+  - {fileID: 2100000, guid: e5d32e0489174e344bf5e5f7167cfd61, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -94,6 +94,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1bdd779c478425d47b8e380f48cf0f3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  positionOffset: {x: -5, y: 5, z: -5}
   resolution: 25
   size: 10
   loops: 500
@@ -113,3 +114,4 @@ MonoBehaviour:
   windVelocity: {x: 0, y: 0, z: 0}
   restrained: 000000001900000054010000170100006e000000
   clothCompute: {fileID: 7200000, guid: c0c901fb95de9c6458849ef702d16d71, type: 3}
+  sphereColliders: []

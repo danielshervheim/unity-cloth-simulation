@@ -9,16 +9,13 @@ public class ClothSpawnerEditor : Editor {
 	private bool showDiagonalSpringProperties = false;
 	private bool showBendingSpringProperties = false;
 	private bool showWindProperties = false;
-	private bool showColliderProperties = false;
 
 	private SerializedProperty restrained;
 	private SerializedProperty sphereColliders;
-	private SerializedProperty boxColliders;
 
 	void OnEnable() {
 		restrained = serializedObject.FindProperty("restrained");
 		sphereColliders = serializedObject.FindProperty("sphereColliders");
-		boxColliders = serializedObject.FindProperty("boxColliders");
 	}
 
 	public override void OnInspectorGUI() {
@@ -27,6 +24,8 @@ public class ClothSpawnerEditor : Editor {
 		EditorGUILayout.Space();
 		showSimulationProperties = EditorGUILayout.Foldout(showSimulationProperties, "Simulation Properties", true);
 		if (showSimulationProperties) {
+			clothSpawner.positionOffset = EditorGUILayout.Vector3Field("Position Offset", clothSpawner.positionOffset);
+
 			// Disable certain parameters that cannot be changed at runtime.
 			if (clothSpawner.WasSuccessfullyInitialized()) {
 				GUI.enabled = false;
@@ -79,14 +78,10 @@ public class ClothSpawnerEditor : Editor {
 		serializedObject.ApplyModifiedProperties();
 
 		EditorGUILayout.Space();
-		showColliderProperties = EditorGUILayout.Foldout(showColliderProperties, "Colliders", true);
-		if (showColliderProperties) {
-			EditorGUI.indentLevel++;
-			EditorGUILayout.PropertyField(sphereColliders, true);
-			EditorGUILayout.PropertyField(boxColliders, true);
-			serializedObject.ApplyModifiedProperties();
-			EditorGUI.indentLevel--;
-		}
+		EditorGUILayout.PropertyField(sphereColliders, true);
+		serializedObject.ApplyModifiedProperties();
+
+		clothSpawner.Recalculate();
 	}
 	
 }
