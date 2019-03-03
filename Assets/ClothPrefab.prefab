@@ -95,9 +95,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   positionOffset: {x: -5, y: 5, z: -5}
+  method: 0
   resolution: 25
   size: 10
-  loops: 500
+  loops: 250
   cor: 0.1
   mass: 1
   pScale: 1
@@ -112,6 +113,7 @@ MonoBehaviour:
   windScale: 1
   dragCoefficient: 50
   windVelocity: {x: 0, y: 0, z: 0}
-  restrained: 000000001900000054010000170100006e000000
+  restrained: 0000000019000000fe0000004e020000
   clothCompute: {fileID: 7200000, guid: c0c901fb95de9c6458849ef702d16d71, type: 3}
+  copyFromScene: 0
   sphereColliders: []

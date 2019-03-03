@@ -26,6 +26,8 @@ public class ClothSpawnerEditor : Editor {
 		if (showSimulationProperties) {
 			clothSpawner.positionOffset = EditorGUILayout.Vector3Field("Position Offset", clothSpawner.positionOffset);
 
+			clothSpawner.method = (ClothSpawner.IntegrationMethod)EditorGUILayout.EnumPopup("Integration Method", clothSpawner.method);
+
 			// Disable certain parameters that cannot be changed at runtime.
 			if (clothSpawner.WasSuccessfullyInitialized()) {
 				GUI.enabled = false;
@@ -78,6 +80,7 @@ public class ClothSpawnerEditor : Editor {
 		serializedObject.ApplyModifiedProperties();
 
 		EditorGUILayout.Space();
+		clothSpawner.copyFromScene = EditorGUILayout.Toggle("Copy From Scene", clothSpawner.copyFromScene);
 		EditorGUILayout.PropertyField(sphereColliders, true);
 		serializedObject.ApplyModifiedProperties();
 

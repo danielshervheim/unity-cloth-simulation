@@ -11,6 +11,7 @@
 
 /* Buffers to hold the current position, velocity, and force of each node. */
 RWStructuredBuffer<float3> positionBuffer;
+RWStructuredBuffer<float3> prevPositionBuffer;
 RWStructuredBuffer<float3> velocityBuffer;
 RWStructuredBuffer<float3> forceBuffer;
 
@@ -38,6 +39,8 @@ uint sphereCount;
 //
 // SIMULATION PARAMETERS
 //
+
+uint useVerlet;
 
 float mass;
 float cor;
@@ -251,8 +254,18 @@ void Integrate (uint3 id : SV_DispatchThreadID) {
 			float3 ov = velocityBuffer[id.x];
 
 			// Eularian integration.
-			velocityBuffer[id.x] += a * dt;
-			positionBuffer[id.x] += velocityBuffer[id.x] * dt;
+			if (useVerlet == 0) {
+				velocityBuffer[id.x] += a * dt;
+				positionBuffer[id.x] += velocityBuffer[id.x] * dt;
+			}
+
+			// Verlet integration.
+			else {
+				positionBuffer[id.x] = 2.0*positionBuffer[id.x] - prevPositionBuffer[id.x] + a*pow(dt, 2.0);
+				velocityBuffer[id.x] = (positionBuffer[id.x] - op) / dt;
+			}
+
+			prevPositionBuffer[id.x] = op;
 
 			// Collision detection.
 			Ray r;
