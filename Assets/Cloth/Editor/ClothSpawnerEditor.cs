@@ -26,9 +26,9 @@ public class ClothSpawnerEditor : Editor {
 		if (showSimulationProperties) {
 			clothSpawner.positionOffset = EditorGUILayout.Vector3Field("Position Offset", clothSpawner.positionOffset);
 
-			clothSpawner.method = (ClothSpawner.IntegrationMethod)EditorGUILayout.EnumPopup("Integration Method", clothSpawner.method);
-
 			// Disable certain parameters that cannot be changed at runtime.
+			clothSpawner.method = (ClothSpawner.IntegrationMethod)EditorGUILayout.EnumPopup("Integration Method", clothSpawner.method);
+			
 			if (clothSpawner.WasSuccessfullyInitialized()) {
 				GUI.enabled = false;
 			}

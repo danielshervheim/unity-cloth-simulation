@@ -5,11 +5,11 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class ClothSpawner : MonoBehaviour {
 
-	public enum IntegrationMethod {EULARIAN, VERLET};
+	public enum IntegrationMethod {EULARIAN, LEAPFROG};
 
 	// Simulation settings.
 	public Vector3 positionOffset = Vector3.zero;
-	public IntegrationMethod method = IntegrationMethod.EULARIAN;
+	public IntegrationMethod method = IntegrationMethod.EULARIAN;  // Not changeable at runtime.
 	public int resolution = 25;  // Not changeable at runtime.
 	public float size = 10f;  // Not changeable at runtime.
 	public int loops = 500;
@@ -52,7 +52,6 @@ public class ClothSpawner : MonoBehaviour {
 
 	// Compute buffers.
 	private ComputeBuffer positionBuffer;
-	private ComputeBuffer prevPositionBuffer;  // for verlet integration.
 	private ComputeBuffer velocityBuffer;
 	private ComputeBuffer forceBuffer;
 	private ComputeBuffer restrainedBuffer;
@@ -102,14 +101,6 @@ public class ClothSpawner : MonoBehaviour {
 		// Create and set the position buffer.
 		positionBuffer = new ComputeBuffer(count, 12);
 		positionBuffer.SetData(vertices);
-
-		// Create and set the previous position buffer.
-		prevPositionBuffer = new ComputeBuffer(count, 12);
-		Vector3[] prevVerts = new Vector3[vertices.Length];
-		for (int i = 0; i < vertices.Length; i++) {
-			prevVerts[i] = vertices[i] + Vector3.up*9.81f*Time.fixedDeltaTime;
-		}
-		prevPositionBuffer.SetData(prevVerts);
 
 		// Create the zeros array.
 		zeros = new Vector3[count];
@@ -161,7 +152,6 @@ public class ClothSpawner : MonoBehaviour {
 		clothCompute.SetBuffer(dragKernel, "triangleBuffer", triangleBuffer);  // only need triangles for drag calculations.
 
 		clothCompute.SetBuffer(integrateKernel, "positionBuffer", positionBuffer);
-		clothCompute.SetBuffer(integrateKernel, "prevPositionBuffer", prevPositionBuffer);  // only needed during integration phase.
 		clothCompute.SetBuffer(integrateKernel, "velocityBuffer", velocityBuffer);
 		clothCompute.SetBuffer(integrateKernel, "forceBuffer", forceBuffer);
 		clothCompute.SetBuffer(integrateKernel, "restrainedBuffer", restrainedBuffer);  // only need fixed vertices during integration phase.
@@ -175,76 +165,94 @@ public class ClothSpawner : MonoBehaviour {
 		clothCompute.SetFloat("dRl", segmentLength * Mathf.Sqrt(2.0f));
 		clothCompute.SetFloat("bRl", segmentLength * Mathf.Sqrt(2.0f) * 2.0f);
 
+		clothCompute.SetInt("euler", 1);
+
+		if (method == IntegrationMethod.LEAPFROG) {
+			// compute half-step ahead positions by eulerian integration for leapfrog method.
+
+			// Update the positions to a half time step
+			UpdateSimulation(1, Time.deltaTime*0.5f);
+
+			// Clear out the velocity buffer to "reset" it, since the velocity is advanced first in
+			// leapfrog method.
+			velocityBuffer.SetData(zeros);
+
+			clothCompute.SetInt("euler", 0);
+		}
+
 		// Initialization was successful.
 		successfullyInitialized = true;
 	}
 
 
 
+	void UpdateSimulation(int t, float dt) {
+		// Update the dynamic simulation variables.
+		clothCompute.SetFloat("mass", mass);
+		clothCompute.SetFloat("cor", cor);
+		clothCompute.SetFloat("dt", dt/(float)t);
+
+		clothCompute.SetFloat("windScale", windScale);
+		clothCompute.SetFloat("dragCoefficient", dragCoefficient);
+		clothCompute.SetVector("windVelocity", windVelocity);
+
+		clothCompute.SetFloat("pScale", pScale);
+		clothCompute.SetFloat("pKs", pKs);
+		clothCompute.SetFloat("pKd", pKd);
+
+		clothCompute.SetFloat("dScale", dScale);
+		clothCompute.SetFloat("dKs", dKs);
+		clothCompute.SetFloat("dKd", dKd);
+			
+		clothCompute.SetFloat("bScale", bScale);
+		clothCompute.SetFloat("bKs", bKs);
+		clothCompute.SetFloat("bKd", bKd);
+
+		// Reset sphereColliders array from scene, if enabled.
+		if (copyFromScene) {
+			SphereCollider[] inScene = FindObjectsOfType<SphereCollider>();
+			sphereColliders = new GPUCollision.SphereCollider[inScene.Length];
+			for (int i = 0; i < inScene.Length; i++) {
+				sphereColliders[i].center = inScene[i].transform.TransformPoint(inScene[i].center);
+				sphereColliders[i].radius = inScene[i].radius;
+			}
+		}
+
+		// Update the collision buffers.
+		if (sphereBuffer != null) {
+			sphereBuffer.Release();
+		}
+
+		if (sphereColliders != null && sphereColliders.Length > 0) {
+			sphereCount = sphereColliders.Length;
+			sphereBuffer = new ComputeBuffer(sphereCount, GPUCollision.SphereColliderSize());
+			sphereBuffer.SetData(sphereColliders);
+			clothCompute.SetInt("sphereCount", sphereCount);
+			clothCompute.SetBuffer(integrateKernel, "sphereBuffer", sphereBuffer);
+		}
+		else {
+			clothCompute.SetInt("sphereCount", 0);
+		}
+
+		// Advance the simulation n times.
+		for (int i = 0; i < t; i++) {
+			// Clear the force buffer.
+			forceBuffer.SetData(zeros);
+
+			// Accumulate the spring and drag forces.
+			clothCompute.Dispatch(springKernel, count/256+1, 1, 1);
+			clothCompute.Dispatch(dragKernel, (triangles.Length/3)/256+1, 1, 1);
+
+			// Update the simulation.
+			clothCompute.Dispatch(integrateKernel, count/256+1, 1, 1);
+		}
+	}
+
+
+
 	void FixedUpdate() {
 		if (successfullyInitialized) {
-			// Update the dynamic simulation variables.
-
-			clothCompute.SetInt("useVerlet", method==IntegrationMethod.VERLET?1:0);
-
-			clothCompute.SetFloat("mass", mass);
-			clothCompute.SetFloat("cor", cor);
-			clothCompute.SetFloat("dt", Time.deltaTime/(float)loops);
-
-			clothCompute.SetFloat("windScale", windScale);
-			clothCompute.SetFloat("dragCoefficient", dragCoefficient);
-			clothCompute.SetVector("windVelocity", windVelocity);
-
-			clothCompute.SetFloat("pScale", pScale);
-			clothCompute.SetFloat("pKs", pKs);
-			clothCompute.SetFloat("pKd", pKd);
-
-			clothCompute.SetFloat("dScale", dScale);
-			clothCompute.SetFloat("dKs", dKs);
-			clothCompute.SetFloat("dKd", dKd);
-			
-			clothCompute.SetFloat("bScale", bScale);
-			clothCompute.SetFloat("bKs", bKs);
-			clothCompute.SetFloat("bKd", bKd);
-
-			// Reset sphereColliders array from scene, if enabled.
-			if (copyFromScene) {
-				SphereCollider[] inScene = FindObjectsOfType<SphereCollider>();
-				sphereColliders = new GPUCollision.SphereCollider[inScene.Length];
-				for (int i = 0; i < inScene.Length; i++) {
-					sphereColliders[i].center = inScene[i].transform.TransformPoint(inScene[i].center);
-					sphereColliders[i].radius = inScene[i].radius;
-				}
-			}
-
-			// Update the collision buffers.
-			if (sphereBuffer != null) {
-				sphereBuffer.Release();
-			}
-
-			if (sphereColliders != null && sphereColliders.Length > 0) {
-				sphereCount = sphereColliders.Length;
-				sphereBuffer = new ComputeBuffer(sphereCount, GPUCollision.SphereColliderSize());
-				sphereBuffer.SetData(sphereColliders);
-				clothCompute.SetInt("sphereCount", sphereCount);
-				clothCompute.SetBuffer(integrateKernel, "sphereBuffer", sphereBuffer);
-			}
-			else {
-				clothCompute.SetInt("sphereCount", 0);
-			}
-
-			// Advance the simulation n times.
-			for (int i = 0; i < loops; i++) {
-				// Clear the force buffer.
-				forceBuffer.SetData(zeros);
-
-				// Accumulate the spring and drag forces.
-				clothCompute.Dispatch(springKernel, count/256+1, 1, 1);
-				clothCompute.Dispatch(dragKernel, (triangles.Length/3)/256+1, 1, 1);
-
-				// Update the simulation.
-				clothCompute.Dispatch(integrateKernel, count/256+1, 1, 1);
-			}
+			UpdateSimulation(loops, Time.deltaTime);
 
 			// Get the recalculated positions back and set them as the mesh vertices.
 			positionBuffer.GetData(vertices);
@@ -260,10 +268,6 @@ public class ClothSpawner : MonoBehaviour {
 	void OnDestroy() {
 		if (positionBuffer != null) {
 			positionBuffer.Release();
-		}
-
-		if (prevPositionBuffer != null) {
-			prevPositionBuffer.Release();
 		}
 
 		if (velocityBuffer != null) {
