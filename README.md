@@ -2,7 +2,7 @@
 
 A mass-spring-damper based real-time cloth simulation, implemented in [Unity](https://unity3d.com/).
 
-![image](https://imgur.com/Kj7RsWR.gif)
+![image](https://imgur.com/cs4wZme.gif)
 
 The cloth is represented as a grid of nodes, and is affected by five forces:
 
